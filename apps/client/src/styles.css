@@ -227,6 +227,27 @@ p {
   color: rgba(6, 37, 27, 0.78);
 }
 
+.claim-links {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.claim-link-row span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.claim-link-row button {
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  color: #06251b;
+  background: linear-gradient(135deg, #5eead4, #a7f3d0);
+  font-weight: 800;
+}
+
 .seat-pill {
   display: inline-flex;
   align-items: center;

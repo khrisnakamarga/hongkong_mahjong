@@ -51,6 +51,28 @@ function getRequestPath(url: string | undefined): string {
   }
 }
 
+function getHeaderValue(request: IncomingMessage, name: string): string | undefined {
+  const value = request.headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getPublicBaseUrl(request: IncomingMessage): string {
+  const origin = getHeaderValue(request, 'origin');
+  if (origin?.startsWith('http://') || origin?.startsWith('https://')) {
+    return origin;
+  }
+
+  const forwardedProto = getHeaderValue(request, 'x-forwarded-proto')?.split(',')[0]?.trim();
+  const forwardedHost = getHeaderValue(request, 'x-forwarded-host')?.split(',')[0]?.trim();
+  const host = forwardedHost || getHeaderValue(request, 'host') || '127.0.0.1:8787';
+  const protocol = forwardedProto || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+  return `${protocol}://${host}`;
+}
+
+function claimLinkUrl(baseUrl: string, roomCode: string, seatIndex: number, token: string): string {
+  return `${baseUrl}/claim?room=${encodeURIComponent(roomCode)}&seat=${seatIndex}&token=${encodeURIComponent(token)}`;
+}
+
 function tryServeClientAsset(clientDistDir: string | undefined, requestPath: string, response: ServerResponse): boolean {
   if (!clientDistDir) {
     return false;
@@ -161,9 +183,13 @@ export function createServerApp(options: ServerAppOptions = {}): ServerApp {
       if (request.method === 'POST' && url.pathname === '/api/rooms') {
         const body = await readJsonBody(request) as { seed?: string };
         const result = await roomManager.createRoom(typeof body.seed === 'string' ? body.seed : undefined);
+        const publicBaseUrl = getPublicBaseUrl(request);
         sendJson(response, 201, {
           room: roomManager.createSnapshot(result.room),
-          claimLinks: result.claimLinks
+          claimLinks: result.claimLinks.map((link) => ({
+            ...link,
+            url: claimLinkUrl(publicBaseUrl, result.room.roomCode, link.seatIndex, link.token)
+          }))
         });
         return;
       }

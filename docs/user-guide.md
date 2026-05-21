@@ -39,17 +39,28 @@ The first player should create the room:
 2. Enter a display name.
 3. Click **Create server room**.
 4. Copy the room code shown in the Room card.
-5. Click one seat in **Seat takeover** to claim it.
+5. In **Seat takeover**, copy one private claim link for each player and send each person a different link.
+6. Click one seat in **Seat takeover** to claim it for yourself.
 
 Other players should join:
 
-1. Open the same website.
-2. Enter the shared room code in **Room code**.
-3. Enter a display name.
-4. Click **Join room**.
-5. Click an unclaimed seat in **Seat takeover**.
+1. Open the private claim link shared by the room creator.
+2. Enter a display name if they want to change the default.
+3. Click the matching seat in **Seat takeover**. The page will already know the room, seat, and private token from the link.
+
+Players can also open the same website, enter the shared room code, and click **Join room** to spectate. Spectators cannot claim a seat unless they have one of the private claim links.
 
 After joining, the table updates through WebSocket messages. If the socket disconnects, refresh the page and rejoin the room.
+
+### Private claim link format
+
+A private claim link looks like this:
+
+```text
+https://<your-app-host>/claim?room=<ROOM_CODE>&seat=<0-3>&token=<PRIVATE_TOKEN>
+```
+
+The `room` value chooses the room, `seat` chooses East/South/West/North by seat index, and `token` authorizes that seat takeover. Treat these links like passwords for the seats.
 
 ## Taking actions
 

@@ -101,6 +101,12 @@ interface SeatSession {
   readonly sessionToken: string;
 }
 
+interface PendingClaimLink {
+  readonly roomCode: string;
+  readonly seatIndex: number;
+  readonly token: string;
+}
+
 interface FanConfig {
   readonly id: FanFeatureId;
   readonly name: string;
@@ -451,6 +457,18 @@ function readStoredSession(): SeatSession | undefined {
   return undefined;
 }
 
+function readPendingClaimLink(): PendingClaimLink | undefined {
+  const params = new URLSearchParams(window.location.search);
+  const roomCode = params.get('room')?.trim().toUpperCase();
+  const seat = params.get('seat');
+  const token = params.get('token')?.trim();
+  const seatIndex = seat === null ? Number.NaN : Number(seat);
+  if (!roomCode || !token || !Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= WINDS.length) {
+    return undefined;
+  }
+  return { roomCode, seatIndex, token };
+}
+
 function TileView({
   tile,
   disabled = false,
@@ -670,6 +688,7 @@ export function App() {
   const [fanConfig, setFanConfig] = useState(createInitialFanConfig);
   const [claimLinks, setClaimLinks] = useState<readonly ClaimLink[]>([]);
   const [seatSession, setSeatSession] = useState<SeatSession | undefined>(readStoredSession);
+  const [pendingClaimLink, setPendingClaimLink] = useState<PendingClaimLink | undefined>(readPendingClaimLink);
   const [demoRound, setDemoRound] = useState(initialRound);
   const [demoVersion, setDemoVersion] = useState(1);
   const [snapshot, setSnapshot] = useState<RoomSnapshot>(() => createRoomSnapshot(initialRound, 'DEMO01', 1, 0));
@@ -750,7 +769,7 @@ export function App() {
     socketRef.current = socket;
     socket.addEventListener('open', () => {
       setConnectionState('connected');
-      setStatus(`Connected to local realtime server room ${roomCode}.`);
+      setStatus(`Connected to server room ${roomCode}.`);
     });
     socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data)) as {
@@ -779,6 +798,34 @@ export function App() {
       setConnectionState((current) => (current === 'connected' ? 'offline' : current));
     });
   }, [closeSocket, pushLog, wsBase]);
+
+  const openPrivateClaimLink = useCallback(async (claim: PendingClaimLink) => {
+    try {
+      const response = await fetch(`${apiBase}/api/rooms/${encodeURIComponent(claim.roomCode)}`);
+      if (!response.ok) {
+        throw new Error(`Room lookup returned ${response.status}.`);
+      }
+      const payload = await response.json() as { readonly room: RoomSnapshot };
+      const link = {
+        seatIndex: claim.seatIndex,
+        token: claim.token,
+        url: `${window.location.origin}/claim?room=${encodeURIComponent(claim.roomCode)}&seat=${claim.seatIndex}&token=${encodeURIComponent(claim.token)}`
+      };
+      setFourAiRunning(false);
+      setMode('server');
+      setSnapshot(payload.room);
+      setClaimLinks([link]);
+      setRoomCodeInput(claim.roomCode);
+      setConnectionState('connected');
+      setStatus(`Private claim link loaded for ${WIND_LABELS[payload.room.seats[claim.seatIndex]?.wind ?? 'east']}. Click that seat to take it over.`);
+      connectWebSocket(claim.roomCode);
+      pushLog(`Loaded private claim link for room ${claim.roomCode}.`);
+      setPendingClaimLink(undefined);
+    } catch (error) {
+      setConnectionState('offline');
+      setStatus(`Private claim link failed: ${error instanceof Error ? error.message : 'unknown error'}.`);
+    }
+  }, [apiBase, connectWebSocket, pushLog]);
 
   const createServerRoom = useCallback(async (fallbackToDemo: boolean) => {
     setConnectionState('checking');
@@ -815,14 +862,18 @@ export function App() {
       return;
     }
     didInitialConnect.current = true;
+    if (pendingClaimLink) {
+      void openPrivateClaimLink(pendingClaimLink);
+      return closeSocket;
+    }
     void createServerRoom(true);
     return closeSocket;
-  }, [closeSocket, createServerRoom]);
+  }, [closeSocket, createServerRoom, openPrivateClaimLink, pendingClaimLink]);
 
   const joinRoom = useCallback(async () => {
     const targetRoom = roomCodeInput.trim().toUpperCase();
     if (!targetRoom) {
-      setStatus('Enter a room code to join an existing local server room.');
+      setStatus('Enter a room code to join an existing server room.');
       return;
     }
     try {
@@ -860,7 +911,7 @@ export function App() {
 
     const token = claimLinks.find((link) => link.seatIndex === seatIndex)?.token;
     if (!token) {
-      setStatus('This room was joined without private claim links. Create a new local room or open a private claim URL.');
+      setStatus('This room was joined without private claim links. Create a new server room or open a private claim URL.');
       return;
     }
     try {
@@ -896,6 +947,13 @@ export function App() {
     refreshDemoSnapshot,
     snapshot.roomCode
   ]);
+
+  const copyClaimLink = useCallback((link: ClaimLink) => {
+    void navigator.clipboard.writeText(link.url).then(
+      () => setStatus(`Copied private claim link for ${WIND_LABELS[snapshot.seats[link.seatIndex]?.wind ?? 'east']}.`),
+      () => setStatus('Could not copy automatically; select the link and copy it manually.')
+    );
+  }, [snapshot.seats]);
 
   const submitAction = useCallback((action: LegalAction) => {
     if (!snapshot.legalActions.some((candidate) => actionMatches(candidate, action))) {
@@ -1043,7 +1101,7 @@ export function App() {
     <main className="app-shell">
       <section className="hero card">
         <div>
-          <p className="eyebrow">Playable local-first table</p>
+          <p className="eyebrow">Playable Mahjong table</p>
           <h1>Hong Kong Mahjong</h1>
           <p>
             A responsive React Mahjong table with realtime server integration when available and a robust local demo adapter when it is
@@ -1052,7 +1110,7 @@ export function App() {
         </div>
         <div className="hero-actions">
           <span className={`status-dot ${connectionState}`} />
-          <strong>{mode === 'server' ? 'Local server room' : 'Demo adapter'}</strong>
+          <strong>{mode === 'server' ? 'Server room' : 'Demo adapter'}</strong>
           <span>{status}</span>
         </div>
       </section>
@@ -1136,6 +1194,23 @@ export function App() {
               </button>
             ))}
           </div>
+          {mode === 'server' && claimLinks.length > 0 ? (
+            <div className="claim-links" aria-label="private seat claim links">
+              <p className="muted">Share one private link per player. Anyone with a link can claim that seat.</p>
+              {claimLinks.map((link) => {
+                const seat = snapshot.seats[link.seatIndex];
+                return (
+                  <label className="field claim-link-row" key={`${snapshot.roomCode}-${link.seatIndex}`}>
+                    {seat ? `${WIND_LABELS[seat.wind]} claim link` : `Seat ${link.seatIndex} claim link`}
+                    <span>
+                      <input readOnly value={link.url} onFocus={(event) => event.currentTarget.select()} />
+                      <button type="button" onClick={() => copyClaimLink(link)}>Copy</button>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
           {seatSession ? <p className="muted">Stored session for seat {seatSession.seatIndex} in room {seatSession.roomCode}.</p> : null}
         </article>
       </section>

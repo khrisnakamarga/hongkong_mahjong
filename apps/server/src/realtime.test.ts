@@ -213,6 +213,30 @@ describe('WebSocket realtime protocol', () => {
     expect(spectatorSnapshot.payload.round.phase).toBe('awaitingClaims');
   });
 
+  it('returns browser-origin private claim links when creating rooms through HTTP', async () => {
+    const app = createServerApp();
+    apps.push(app);
+    const port = await listen(app);
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://mahjong.example.test'
+      },
+      body: JSON.stringify({ seed: 'claim-link-origin' })
+    });
+    const payload = await response.json() as {
+      readonly room: { readonly roomCode: string };
+      readonly claimLinks: readonly { readonly seatIndex: number; readonly token: string; readonly url: string }[];
+    };
+
+    expect(response.status).toBe(201);
+    expect(payload.claimLinks).toHaveLength(4);
+    expect(payload.claimLinks[0]?.url).toContain(`https://mahjong.example.test/claim?room=${payload.room.roomCode}&seat=0&token=`);
+    expect(payload.claimLinks[0]?.url).toContain(encodeURIComponent(payload.claimLinks[0]?.token ?? ''));
+  });
+
   it('sends action-required claim notifications for Chow, Pong, Kong, and Mahjong', async () => {
     const app = createServerApp();
     apps.push(app);
