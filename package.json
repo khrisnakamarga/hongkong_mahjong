@@ -1,0 +1,39 @@
+{
+  "name": "hongkong-mahjong",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-ready bootstrap for a local and Azure-deployable Hong Kong Mahjong web app.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @hongkong-mahjong/game-engine && concurrently -k -n server,client -c blue,green \"npm run dev -w @hongkong-mahjong/server\" \"npm run dev -w @hongkong-mahjong/client\"",
+    "dev:lan": "npm run build -w @hongkong-mahjong/game-engine && concurrently -k -n server,client -c blue,green \"npm run dev:lan -w @hongkong-mahjong/server\" \"npm run dev:lan -w @hongkong-mahjong/client\"",
+    "build": "tsc -b packages/game-engine apps/server && npm run build -w @hongkong-mahjong/client",
+    "typecheck": "tsc -b packages/game-engine apps/server && tsc -p apps/client/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --max-warnings=0",
+    "clean": "node scripts/clean.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.49.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8",
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^5.4.21"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

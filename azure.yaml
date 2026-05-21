@@ -1,0 +1,15 @@
+name: hongkong-mahjong
+metadata:
+  template: azd-init
+
+infra:
+  provider: bicep
+  path: infra
+
+services:
+  web:
+    project: .
+    host: containerapp
+    docker:
+      path: Dockerfile
+      context: .
