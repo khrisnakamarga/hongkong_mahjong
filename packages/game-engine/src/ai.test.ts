@@ -4,6 +4,7 @@ import {
   createInitialRoundState,
   createTileSet,
   getLegalActions,
+  advanceAiRound,
   runAiRoundSimulation,
   selectAiAction,
   type AiDifficulty,
@@ -151,6 +152,25 @@ describe('AI player policies', () => {
     expect(first.finalState.conclusion?.reason).toMatch(/win|exhaustiveDraw/);
     expect(first.decisions.map((decision) => actionKey(decision.selectedAction))).toEqual(second.decisions.map((decision) => actionKey(decision.selectedAction)));
     expect(first.finalState.conclusion).toEqual(second.finalState.conclusion);
+  });
+
+  it('lets an AI-only table advance from a finished round into the next round', () => {
+    const finished = roundState({
+      phase: 'finished',
+      conclusion: { reason: 'win', winnerSeat: 1, source: 'discard', message: 'South wins.' },
+      dealerSeat: 0,
+      currentTurn: 0,
+      windRoundStartDealerSeat: 0,
+      players: [emptyPlayer(0), emptyPlayer(1), emptyPlayer(2), emptyPlayer(3)]
+    });
+
+    const result = advanceAiRound(finished, { seed: 'ai-next-round', policies: ['medium', 'medium', 'medium', 'medium'] });
+
+    expect(result.decisions).toHaveLength(1);
+    expect(result.decisions[0]?.selectedAction).toEqual({ type: 'nextRound' });
+    expect(result.state.phase).toBe('awaitingDiscard');
+    expect(result.state.dealerSeat).toBe(1);
+    expect(result.state.players.map((player) => player.controller)).toEqual(['ai', 'ai', 'ai', 'ai']);
   });
 
   it('keeps tile conservation and deterministic legal play across several four-AI simulations', () => {

@@ -21,8 +21,8 @@ Generated: 2026-05-19
 | Attribute | Value |
 |-----------|-------|
 | Classification | Production-ready |
-| Scale | Multiple simultaneous four-player rooms with scale-out readiness |
-| Budget | Balanced production: managed scale-out with Cosmos DB, Redis-compatible cache, monitoring, and cost-conscious SKUs |
+| Scale | Multiple simultaneous four-player rooms on one Container Apps replica; scale-out requires future durable coordination adapters |
+| Budget | Cost-conscious first deployment with Container Apps, Cosmos DB, and monitoring |
 | Subscription | Visual Studio Enterprise subscription tied to personal account `khrisnaadi@gmail.com` |
 | Location | `westus3` |
 
@@ -103,7 +103,6 @@ The attached PDF is the primary rules source. Planned assumptions from the PDF:
 | Realtime web app container | Azure Container Apps | Balanced production profile; start cost-conscious and scale by concurrency/CPU |
 | Container image | Azure Container Registry | Basic |
 | Shared/persistent game state | Azure Cosmos DB for NoSQL | Serverless NoSQL database with `rooms` and `gameEvents` containers |
-| Realtime coordination/cache | Azure Cache for Redis | Standard C1-compatible cache with TLS, Entra access policy, and Key Vault-protected access key |
 | Monitoring | Application Insights + Log Analytics | Consumption/basic defaults |
 | Secrets/config | Azure Key Vault + managed identity | Standard |
 | Static assets | Served by the app container initially | N/A |
@@ -118,7 +117,6 @@ This cannot be finalized until subscription, region, and deployment profile are 
 | Microsoft.App/containerApps | 1 | Web/game server |
 | Microsoft.ContainerRegistry/registries | 1 | Container image registry |
 | Microsoft.DocumentDB/databaseAccounts | 1 | Cosmos DB account for persistent room/game state |
-| Microsoft.Cache/redis or Microsoft.Cache/redisEnterprise | 1 | Redis-compatible cache/pubsub for scale-out coordination |
 | Microsoft.KeyVault/vaults | 1 | Secret/config protection |
 | Microsoft.OperationalInsights/workspaces | 1 | Centralized logs |
 | Microsoft.Insights/components | 1 | Application Insights |
@@ -175,7 +173,7 @@ Current Azure CLI context check: the local CLI lists subscriptions for `kkamarga
 ### Phase 7: Azure Deployment Preparation
 
 - Add Dockerfile and production build pipeline.
-- Add `azure.yaml` and Bicep infrastructure for Container Apps, ACR, Cosmos DB, Redis, Key Vault, Log Analytics, and Application Insights.
+- Add `azure.yaml` and Bicep infrastructure for Container Apps, ACR, Cosmos DB, Key Vault, Log Analytics, and Application Insights.
 - Add environment configuration and deployment documentation.
 - Keep this plan in `Executing` until app implementation, subscription context, quota validation, and local-only artifact validation are complete; do not mark `Ready for Validation` yet.
 

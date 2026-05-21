@@ -5,7 +5,7 @@ This directory contains local-only Azure Developer CLI preparation artifacts for
 ## Files
 
 - `azure.yaml` configures a single containerized `web` service for Azure Container Apps.
-- `infra/main.bicep` provisions Container Apps, ACR, Cosmos DB for room/game state, Azure Cache for Redis, Key Vault, Application Insights, and Log Analytics.
+- `infra/main.bicep` provisions Container Apps, ACR, Cosmos DB for room/game state, Key Vault, Application Insights, and Log Analytics. The current deployment is single-replica because the server uses in-memory coordination adapters.
 - `infra/main.parameters.json` maps AZD environment variables to Bicep parameters.
 - `Dockerfile` builds the Node server and React client into one production container.
 

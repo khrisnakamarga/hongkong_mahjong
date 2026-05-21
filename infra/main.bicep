@@ -20,7 +20,7 @@ param environmentType string = 'prod'
 
 param containerImageName string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 param minReplicas int = 1
-param maxReplicas int = 5
+param maxReplicas int = 1
 param containerCpu string = '0.5'
 param containerMemory string = '1Gi'
 param tags object = {}
@@ -48,7 +48,6 @@ var cosmosAccountName = take('cosmos-${safeAppName}-${safeEnvironmentName}-${res
 var cosmosDatabaseName = 'mahjong'
 var roomsContainerName = 'rooms'
 var gameEventsContainerName = 'gameEvents'
-var redisName = take('redis-${safeAppName}-${safeEnvironmentName}-${resourceToken}', 63)
 
 resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: managedIdentityName
@@ -90,19 +89,6 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   }
   properties: {
     adminUserEnabled: false
-    policies: {
-      quarantinePolicy: {
-        status: 'disabled'
-      }
-      trustPolicy: {
-        type: 'Notary'
-        status: 'disabled'
-      }
-      retentionPolicy: {
-        days: 7
-        status: 'enabled'
-      }
-    }
   }
 }
 
@@ -219,22 +205,6 @@ resource cosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAss
   }
 }
 
-resource redis 'Microsoft.Cache/redis@2023-08-01' = {
-  name: redisName
-  location: location
-  tags: baseTags
-  properties: {
-    sku: {
-      name: 'Standard'
-      family: 'C'
-      capacity: 1
-    }
-    enableNonSslPort: false
-    minimumTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled'
-  }
-}
-
 resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVault.id, managedIdentity.name, 'Key Vault Secrets User')
   scope: keyVault
@@ -242,14 +212,6 @@ resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
     principalId: managedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
-  }
-}
-
-resource redisAccessKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: keyVault
-  name: 'redis-access-key'
-  properties: {
-    value: redis.listKeys().primaryKey
   }
 }
 
@@ -265,6 +227,16 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+  }
+}
+
+resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, managedIdentity.id, 'acrpull')
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalId: managedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -284,19 +256,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          identity: managedIdentity.id
+        }
+      ]
       ingress: {
         external: true
         targetPort: 8080
         transport: 'auto'
         allowInsecure: false
       }
-      secrets: [
-        {
-          name: 'redis-access-key'
-          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${redisAccessKeySecret.name}'
-          identity: managedIdentity.id
-        }
-      ]
     }
     template: {
       containers: [
@@ -339,22 +310,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'COSMOS_GAME_EVENTS_CONTAINER_NAME'
               value: gameEventsContainerName
-            }
-            {
-              name: 'REDIS_HOST'
-              value: redis.properties.hostName
-            }
-            {
-              name: 'REDIS_PORT'
-              value: '6380'
-            }
-            {
-              name: 'REDIS_TLS'
-              value: 'true'
-            }
-            {
-              name: 'REDIS_PASSWORD'
-              secretRef: 'redis-access-key'
             }
           ]
           resources: {
@@ -402,18 +357,9 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     }
   }
   dependsOn: [
+    acrPull
     keyVaultSecretsUser
   ]
-}
-
-resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, containerApp.name, 'acrpull')
-  scope: containerRegistry
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalId: containerApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
 }
 
 output resourceGroupName string = resourceGroup().name
@@ -424,4 +370,3 @@ output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.properties.Con
 output SERVICE_WEB_URI string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output COSMOS_ENDPOINT string = cosmosAccount.properties.documentEndpoint
 output COSMOS_DATABASE_NAME string = cosmosDatabaseName
-output REDIS_HOST string = redis.properties.hostName

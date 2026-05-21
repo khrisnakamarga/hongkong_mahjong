@@ -160,7 +160,6 @@ flowchart TB
     MI["Managed Identity\napp identity"]
     KV["Azure Key Vault\nsecret references"]
     Cosmos["Azure Cosmos DB for NoSQL\nrooms + gameEvents"]
-    Redis["Azure Cache for Redis\ncoordination/cache"]
     AppInsights["Application Insights\napp telemetry"]
     LogAnalytics["Log Analytics Workspace\ncentral logs"]
   end
@@ -179,7 +178,6 @@ flowchart TB
   WebApp -->|managed identity| MI
   MI -->|read secrets| KV
   WebApp -->|room snapshots/history| Cosmos
-  WebApp -->|locks/pubsub/session cache| Redis
   WebApp -->|telemetry| AppInsights
   AppInsights --> LogAnalytics
   Env --> LogAnalytics
@@ -195,12 +193,11 @@ flowchart TB
 
 | Azure resource | Responsibility | Architecture standard addressed |
 | --- | --- | --- |
-| Azure Container Apps | Hosts the unified Node server and built React assets; supports HTTPS/WebSocket ingress and scale-out. | Reliability, scalability, operational simplicity. |
+| Azure Container Apps | Hosts the unified Node server and built React assets; current deployment is capped at one replica while room coordination is in memory. | Reliability and operational simplicity. |
 | Azure Container Registry | Stores the production container image deployed by AZD. | Supply-chain control and repeatable deployment. |
 | Managed Identity | Gives the app identity-based access to Azure resources. | Least privilege and secret minimization. |
-| Key Vault | Stores secret values such as Redis access key references. | Centralized secret management. |
+| Key Vault | Provides a standard location for future secret/config references. | Centralized secret management. |
 | Cosmos DB for NoSQL | Planned durable room/game state, score ledgers, and game event history. | Data durability and horizontal scalability. |
-| Azure Cache for Redis | Planned cross-instance locks, pub/sub, and fast ephemeral coordination. | Low-latency realtime coordination. |
 | Application Insights | Application traces, request telemetry, and runtime diagnostics. | Observability. |
 | Log Analytics | Central log and metrics workspace for Container Apps and App Insights. | Operations and incident response. |
 
@@ -236,7 +233,7 @@ sequenceDiagram
 | Server authority | Server validates action shape, version, seat session, and legal action before mutation. |
 | Encapsulation | UI consumes snapshots; domain logic does not depend on React or WebSocket code. |
 | Security boundaries | Raw seat tokens are bearer secrets; server stores token hashes; concealed hands are withheld until round finish. |
-| Scalability boundary | Repository and coordination interfaces separate in-memory local mode from Cosmos/Redis production backing services. |
+| Scalability boundary | Repository and coordination interfaces keep the current single-replica in-memory deployment separate from future durable production backing services. |
 | Observability | Azure plan includes Application Insights and Log Analytics. |
 | Resilience | Deterministic room transitions and version checks prevent stale command races. |
 | Testability | Unit, integration, simulation, and Playwright suites validate engine/server/UI behavior locally. |
@@ -244,7 +241,7 @@ sequenceDiagram
 
 ## 6. Follow-up architecture work
 
-1. Implement Cosmos DB repository and Redis coordination adapters behind the existing interfaces.
+1. Implement durable repository and distributed coordination adapters behind the existing interfaces.
 2. Add durable game history and replay views from event records.
 3. Add production-grade auth if private claim links are no longer sufficient.
 4. Add live dashboards for command latency, room count, AI decisions, and failed actions.

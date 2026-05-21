@@ -17,8 +17,8 @@ npm run dev
 Room creation returns four private seat claim links. Claim a seat with
 `POST /api/rooms/<roomCode>/claim`, then connect the WebSocket with the returned
 seat session token. The server is authoritative and validates player commands
-against the shared game-engine legal-action APIs; local in-memory room and
-coordination adapters are used until Cosmos DB/Redis adapters are added.
+against the shared game-engine legal-action APIs; live room state and
+coordination currently use in-memory adapters in a single app replica.
 
 For LAN testing:
 
@@ -42,6 +42,7 @@ This mode keeps all four seats AI-controlled and updates the visible table, wall
 
 ## Design and specs
 
+- `docs\user-guide.md` explains how to use the web UI, create/join rooms, claim seats, take actions, and run four-AI spectator mode.
 - `docs\system-design.md` explains the app in a system-design-interview format: requirements, architecture, APIs, data model, scaling, consistency, security, testing, and tradeoffs.
 - `docs\architecture-diagrams.md` contains Mermaid architecture diagrams for the application code and Azure deployment.
 - `docs\hong-kong-mahjong-rules.md` captures the implemented Hong Kong Mahjong rule and scoring assumptions.
@@ -71,7 +72,7 @@ Azure preparation artifacts are included for later validation/deployment:
 - `infra/main.bicep`
 - `infra/main.parameters.json`
 
-These target Azure Container Apps in `westus3` with ACR, Cosmos DB, Azure Cache for Redis, Key Vault, Application Insights, and Log Analytics. The app uses environment variables and managed identity-oriented configuration; secrets are expected to come through Key Vault references.
+These target Azure Container Apps in `westus3` with ACR, Cosmos DB, Key Vault, Application Insights, and Log Analytics. The app currently deploys as a single replica because live room state and realtime coordination use in-memory adapters.
 
 Local-only checks:
 

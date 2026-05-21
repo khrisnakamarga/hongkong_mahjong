@@ -1,5 +1,5 @@
 import { getLegalActions, type LegalAction } from './actions.js';
-import { claimDiscard, createInitialRoundState, declareKong, declareSelfDrawWin, discardTile, drawTile, passClaimWindow, type CreateRoundOptions } from './engine.js';
+import { claimDiscard, createInitialRoundState, createNextRoundState, declareKong, declareSelfDrawWin, discardTile, drawTile, passClaimWindow, type CreateRoundOptions } from './engine.js';
 import { getPlayer, nextSeatIndex, type RoundState } from './state.js';
 import { getTileDefinition, isHonorTile, isSuitTile, sortTiles, tileKeySortValue, type Tile, type TileId, type TileKey } from './tiles.js';
 
@@ -260,6 +260,9 @@ function policyForSeat(options: AiAdvanceOptions, seatIndex: number): Required<A
 }
 
 function applyLegalAction(state: RoundState, seatIndex: number, action: LegalAction): RoundState {
+  if (action.type === 'nextRound') {
+    return createNextRoundState(state);
+  }
   if (action.type === 'draw') {
     return drawTile(state, seatIndex);
   }
@@ -319,7 +322,20 @@ function resolveClaimDecision(state: RoundState, decisions: readonly AiDecision[
 
 export function advanceAiRound(state: RoundState, options: AiAdvanceOptions = {}): AiAdvanceResult {
   if (state.phase === 'finished') {
-    return { state, decisions: [] };
+    const seatIndex = state.dealerSeat;
+    const legalActions = getLegalActions(state, seatIndex);
+    const policy = policyForSeat(options, seatIndex);
+    const selectedAction = selectAiAction({ state, seatIndex, legalActions, policy });
+    if (!selectedAction) {
+      return {
+        state,
+        decisions: [{ seatIndex, difficulty: policy.difficulty, legalActions, applied: false }]
+      };
+    }
+    return {
+      state: applyLegalAction(state, seatIndex, selectedAction),
+      decisions: [{ seatIndex, difficulty: policy.difficulty, legalActions, selectedAction, applied: true }]
+    };
   }
   if (state.phase === 'awaitingClaims') {
     const decisions = state.players

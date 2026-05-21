@@ -118,12 +118,24 @@ const WIND_LABELS: Readonly<Record<SeatWind, string>> = {
 };
 
 function getDefaultApiBase(): string {
-  return import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.hostname}:8787`;
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (window.location.port === '5173' || window.location.port === '4173') {
+    return `${window.location.protocol}//${window.location.hostname}:8787`;
+  }
+  return window.location.origin;
 }
 
 function getDefaultWebSocketBase(): string {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return import.meta.env.VITE_WS_URL ?? `${protocol}//${window.location.hostname}:8787/ws`;
+  if (window.location.port === '5173' || window.location.port === '4173') {
+    return `${protocol}//${window.location.hostname}:8787/ws`;
+  }
+  return `${protocol}//${window.location.host}/ws`;
 }
 
 function nowIso(): string {
@@ -786,12 +798,12 @@ export function App() {
       setClaimLinks(payload.claimLinks);
       setRoomCodeInput(payload.room.roomCode);
       setConnectionState('connected');
-      setStatus(`Created local server room ${payload.room.roomCode}. Claim a seat to play human actions.`);
+      setStatus(`Created server room ${payload.room.roomCode}. Claim a seat to play human actions.`);
       pushLog(`Created server room ${payload.room.roomCode}.`);
       connectWebSocket(payload.room.roomCode);
     } catch (error) {
       setConnectionState('offline');
-      setStatus(`Local server unavailable (${error instanceof Error ? error.message : 'unknown error'}). Demo adapter is active.`);
+      setStatus(`Server unavailable (${error instanceof Error ? error.message : 'unknown error'}). Demo adapter is active.`);
       if (fallbackToDemo) {
         startDemo('Realtime server was not reachable; continued in local demo mode.');
       }
@@ -947,6 +959,34 @@ export function App() {
     }
   }, [aiDifficulty, demoRound, demoVersion, mode, pushLog, refreshDemoSnapshot, snapshot.viewerSeatIndex]);
 
+  const startNextFourAiRound = useCallback((runAfterStart = false) => {
+    if (mode !== 'demo' || snapshot.viewerSeatIndex !== undefined || demoRound.players.some((player) => player.controller === 'human')) {
+      setFourAiRunning(false);
+      setStatus('Start a four-AI spectator game before continuing all-AI rounds.');
+      return;
+    }
+    if (demoRound.phase !== 'finished') {
+      setStatus('The current four-AI round is still in progress.');
+      return;
+    }
+    const nextRound = createNextRoundState(demoRound);
+    const nextVersion = demoVersion + 1;
+    setDemoRound(nextRound);
+    setDemoVersion(nextVersion);
+    refreshDemoSnapshot(nextRound, nextVersion, undefined);
+    setFourAiRunning(runAfterStart);
+    setStatus(runAfterStart ? 'Started the next four-AI round and resumed autoplay.' : 'Started the next four-AI round.');
+    pushLog(`Started next four-AI round: ${WIND_LABELS[nextRound.prevailingWind]} wind, dealer seat ${nextRound.dealerSeat}.`);
+  }, [demoRound, demoVersion, mode, pushLog, refreshDemoSnapshot, snapshot.viewerSeatIndex]);
+
+  const toggleFourAiRunning = useCallback(() => {
+    if (!fourAiRunning && demoRound.phase === 'finished') {
+      startNextFourAiRound(true);
+      return;
+    }
+    setFourAiRunning((current) => !current);
+  }, [demoRound.phase, fourAiRunning, startNextFourAiRound]);
+
   const stepFourAiSpectator = useCallback(() => {
     if (mode !== 'demo') {
       setFourAiRunning(false);
@@ -959,8 +999,7 @@ export function App() {
       return;
     }
     if (demoRound.phase === 'finished') {
-      setFourAiRunning(false);
-      setStatus('Four-AI game finished.');
+      startNextFourAiRound(false);
       return;
     }
     const advanced = advanceFourAiRound(demoRound, aiDifficulty);
@@ -980,7 +1019,7 @@ export function App() {
       setStatus('Four-AI game finished.');
       pushLog(advanced.round.conclusion.message);
     }
-  }, [aiDifficulty, demoRound, demoVersion, mode, pushLog, refreshDemoSnapshot, snapshot.viewerSeatIndex]);
+  }, [aiDifficulty, demoRound, demoVersion, mode, pushLog, refreshDemoSnapshot, snapshot.viewerSeatIndex, startNextFourAiRound]);
 
   useEffect(() => {
     if (!fourAiRunning) {
@@ -993,6 +1032,10 @@ export function App() {
   const discardActions = snapshot.legalActions.filter((action): action is Extract<LegalAction, { type: 'discard' }> => action.type === 'discard');
   const nonDiscardActions = snapshot.legalActions.filter((action) => action.type !== 'discard');
   const viewer = snapshot.viewerSeatIndex === undefined ? undefined : snapshot.round.players[snapshot.viewerSeatIndex];
+  const isFourAiSpectator = mode === 'demo' &&
+    snapshot.viewerSeatIndex === undefined &&
+    snapshot.round.players.every((player) => player.controller === 'ai');
+  const canStartNextFourAiRound = isFourAiSpectator && snapshot.round.phase === 'finished';
   const currentPlayer = snapshot.round.players[snapshot.round.currentTurn];
   const lastDiscard = snapshot.round.lastDiscard;
 
@@ -1050,15 +1093,18 @@ export function App() {
             </label>
           </div>
           <div className="button-row">
-            <button type="button" onClick={() => void createServerRoom(false)}>Create local server room</button>
+            <button type="button" onClick={() => void createServerRoom(false)}>Create server room</button>
             <button type="button" onClick={() => void joinRoom()}>Join room</button>
             <button type="button" onClick={() => startDemo()}>Use local demo</button>
             <button type="button" onClick={autoPlayDemo}>Auto-play to prompt</button>
             <button type="button" onClick={startFourAiSpectator}>Watch 4 AIs</button>
-            <button type="button" onClick={() => setFourAiRunning((current) => !current)}>
+            <button type="button" onClick={toggleFourAiRunning}>
               {fourAiRunning ? 'Pause 4 AIs' : 'Resume 4 AIs'}
             </button>
             <button type="button" onClick={stepFourAiSpectator}>Step 4 AIs</button>
+            {canStartNextFourAiRound ? (
+              <button type="button" onClick={() => startNextFourAiRound(true)}>Start next AI round</button>
+            ) : null}
             <button
               aria-label={revealAllTiles ? 'Hide all tiles' : 'Reveal all tiles'}
               className={`secret-reveal-button ${revealAllTiles ? 'active' : ''}`}

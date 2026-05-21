@@ -107,3 +107,24 @@ test('supports watching four AI players advance without claiming a seat', async 
   await page.getByRole('button', { name: /Pause 4 AIs/i }).click();
   await expect(page.getByRole('button', { name: /Resume 4 AIs/i })).toBeVisible();
 });
+
+test('lets four AI spectator games proceed to the next round after a win or draw', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByRole('button', { name: /Watch 4 AIs/i }).click();
+  await page.getByRole('button', { name: /Pause 4 AIs/i }).click();
+
+  const stepButton = page.getByRole('button', { name: /Step 4 AIs/i });
+  const nextRoundButton = page.getByRole('button', { name: /Start next AI round/i });
+  for (let attempt = 0; attempt < 800; attempt += 1) {
+    if (await nextRoundButton.isVisible({ timeout: 50 }).catch(() => false)) {
+      break;
+    }
+    await stepButton.click();
+  }
+
+  await expect(nextRoundButton).toBeVisible();
+  await nextRoundButton.click();
+  await expect(page.getByText(/Started the next four-AI round/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Pause 4 AIs/i })).toBeVisible();
+});

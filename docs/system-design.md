@@ -230,18 +230,17 @@ The deployment plan targets:
 | Container hosting | Azure Container Apps |
 | Container registry | Azure Container Registry |
 | Durable room/game state | Cosmos DB for NoSQL |
-| Realtime coordination/cache | Azure Cache for Redis |
 | Secrets/config | Key Vault |
 | Logs/metrics | Log Analytics + Application Insights |
 
-The current local implementation uses in-memory adapters. The production design expects Cosmos DB and Redis-compatible adapters behind the same repository/coordination interfaces.
+The current implementation uses in-memory adapters for live room state and coordination, so the Azure deployment is intentionally capped at one replica. A future scale-out design can add durable repository and distributed coordination adapters behind the same interfaces.
 
 ## 15. Scaling considerations
 
-For one server instance, room state can live in memory. For multiple instances:
+For the current one-server-instance deployment, room state can live in memory. For multiple instances:
 
 1. Persist room snapshots and event history to Cosmos DB.
-2. Use Redis for room locks, action-window coordination, and pub/sub fanout.
+2. Use distributed locks, action-window coordination, and pub/sub fanout.
 3. Make WebSocket instances stateless except for connected sockets.
 4. Route every command through an atomic room update to prevent double-discard or duplicate claims.
 5. Use deterministic engine transitions so replay/debugging is possible from room events.
@@ -298,14 +297,14 @@ The Azure plan includes Application Insights and Log Analytics for these signals
 | Shared pure engine | Consistent rules for AI/server/UI/tests | More upfront domain modeling. |
 | Server-authoritative commands | Prevents cheating and client divergence | Requires realtime command round trips. |
 | Room code + private token | Simple no-account onboarding | Tokens must be protected like secrets. |
-| In-memory local adapters | Fast local iteration | Production needs Cosmos/Redis adapters. |
+| In-memory local adapters | Fast local iteration | Multi-replica production needs durable repository and coordination adapters. |
 | Snapshot-based UI | Simple client rendering and privacy controls | Large snapshots may need optimization later. |
 
 ## 21. Current limitations and follow-ups
 
 1. Azure resources are prepared but not deployed.
 2. Local room state is in-memory; production durability requires Cosmos DB adapter implementation.
-3. Redis-backed fanout/locking is planned but not required for local testing.
+3. Distributed fanout/locking is planned but not required for local testing.
 4. Rule coverage is focused on the documented Hong Kong Mahjong assumptions; rare house rules can be added behind configuration.
 5. Account-based identity is intentionally deferred in favor of private claim links.
 
