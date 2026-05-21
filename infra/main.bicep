@@ -1,4 +1,4 @@
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
 @minLength(1)
 @maxLength(64)
@@ -37,7 +37,6 @@ var baseTags = union(tags, {
   'azd-env-name': environmentName
 })
 
-var resourceGroupName = 'rg-${safeAppName}-${safeEnvironmentName}'
 var managedIdentityName = take('id-${safeAppName}-${safeEnvironmentName}', 128)
 var logAnalyticsName = take('log-${safeAppName}-${safeEnvironmentName}-${resourceToken}', 63)
 var appInsightsName = take('appi-${safeAppName}-${safeEnvironmentName}-${resourceToken}', 255)
@@ -51,21 +50,13 @@ var roomsContainerName = 'rooms'
 var gameEventsContainerName = 'gameEvents'
 var redisName = take('redis-${safeAppName}-${safeEnvironmentName}-${resourceToken}', 63)
 
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: resourceGroupName
-  location: location
-  tags: baseTags
-}
-
 resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  scope: resourceGroup
   name: managedIdentityName
   location: location
   tags: baseTags
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  scope: resourceGroup
   name: logAnalyticsName
   location: location
   tags: baseTags
@@ -80,7 +71,6 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 }
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
-  scope: resourceGroup
   name: appInsightsName
   location: location
   tags: baseTags
@@ -92,7 +82,6 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  scope: resourceGroup
   name: acrName
   location: location
   tags: baseTags
@@ -118,7 +107,6 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  scope: resourceGroup
   name: keyVaultName
   location: location
   tags: baseTags
@@ -137,7 +125,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2023-04-15' = {
-  scope: resourceGroup
   name: cosmosAccountName
   location: location
   tags: baseTags
@@ -224,7 +211,7 @@ resource gameEventsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases
 
 resource cosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-04-15' = {
   parent: cosmosAccount
-  name: guid(cosmosAccount.id, managedIdentity.properties.principalId, 'cosmos-data-contributor')
+  name: guid(cosmosAccount.id, managedIdentity.name, 'cosmos-data-contributor')
   properties: {
     roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
     principalId: managedIdentity.properties.principalId
@@ -233,7 +220,6 @@ resource cosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAss
 }
 
 resource redis 'Microsoft.Cache/redis@2023-08-01' = {
-  scope: resourceGroup
   name: redisName
   location: location
   tags: baseTags
@@ -246,24 +232,11 @@ resource redis 'Microsoft.Cache/redis@2023-08-01' = {
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
-    redisConfiguration: {
-      'aad-enabled': 'true'
-    }
-  }
-}
-
-resource redisAccessPolicyAssignment 'Microsoft.Cache/redis/accessPolicyAssignments@2023-08-01' = {
-  parent: redis
-  name: take('apa-${managedIdentity.name}', 63)
-  properties: {
-    accessPolicyName: 'Data Contributor'
-    objectId: managedIdentity.properties.principalId
-    objectIdAlias: managedIdentity.name
   }
 }
 
 resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, managedIdentity.properties.principalId, 'Key Vault Secrets User')
+  name: guid(keyVault.id, managedIdentity.name, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
@@ -281,7 +254,6 @@ resource redisAccessKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
 }
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
-  scope: resourceGroup
   name: containerEnvironmentName
   location: location
   tags: baseTags
@@ -297,7 +269,6 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
 }
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
-  scope: resourceGroup
   name: containerAppName
   location: location
   tags: union(baseTags, {
@@ -432,12 +403,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     keyVaultSecretsUser
-    redisAccessKeySecret
   ]
 }
 
 resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, containerApp.identity.principalId, 'acrpull')
+  name: guid(containerRegistry.id, containerApp.name, 'acrpull')
   scope: containerRegistry
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
@@ -446,7 +416,7 @@ resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-output resourceGroupName string = resourceGroup.name
+output resourceGroupName string = resourceGroup().name
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.properties.loginServer
 output AZURE_CONTAINER_APP_NAME string = containerApp.name
 output AZURE_CONTAINER_APP_ENVIRONMENT_NAME string = containerAppsEnvironment.name

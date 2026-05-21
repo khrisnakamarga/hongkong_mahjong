@@ -1,6 +1,6 @@
 # Hong Kong Mahjong System Design
 
-This document explains the application as a system-design-interview style walkthrough: requirements, architecture, core data model, APIs, scaling strategy, tradeoffs, and follow-ups.
+This document explains the application as a system-design-interview style walkthrough: requirements, architecture, core data model, APIs, scaling strategy, tradeoffs, and follow-ups. See `docs\architecture-diagrams.md` for Mermaid diagrams of the application code and Azure deployment.
 
 ## 1. Problem statement
 

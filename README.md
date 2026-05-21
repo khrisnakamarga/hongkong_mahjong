@@ -43,6 +43,7 @@ This mode keeps all four seats AI-controlled and updates the visible table, wall
 ## Design and specs
 
 - `docs\system-design.md` explains the app in a system-design-interview format: requirements, architecture, APIs, data model, scaling, consistency, security, testing, and tradeoffs.
+- `docs\architecture-diagrams.md` contains Mermaid architecture diagrams for the application code and Azure deployment.
 - `docs\hong-kong-mahjong-rules.md` captures the implemented Hong Kong Mahjong rule and scoring assumptions.
 - `.azure\deployment-plan.md` is the Azure deployment architecture and infrastructure plan.
 
